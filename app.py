@@ -1,3 +1,5 @@
+import time
+
 import boto3
 from datetime import datetime
 from dynamodb import Users
@@ -52,12 +54,13 @@ def get_last_access(user):
     last_access_by_key = False
     last_access = None
     if access_keys['AccessKeyMetadata']:
-        last_access_by_key = iam.get_access_key_last_used(
-            AccessKeyId=access_keys['AccessKeyMetadata'][0]['AccessKeyId'])['AccessKeyLastUsed']['LastUsedDate']
-        # print(f"Ultimo acceso por access key: {last_access_by_key}")
+        try:
+            last_access_by_key = iam.get_access_key_last_used(
+                AccessKeyId=access_keys['AccessKeyMetadata'][0]['AccessKeyId'])['AccessKeyLastUsed']['LastUsedDate']
+        except:
+            pass
     if 'PasswordLastUsed' in user:
         last_access_by_password = user['PasswordLastUsed']
-        # print(f"Ultimo acceso por password: {last_access_by_password}")
     if last_access is None:
         last_access = user['CreateDate']
 
@@ -133,75 +136,81 @@ def delete_user(username):
         print(f"Error al eliminar el usuario: {username}")
 
 
-# if __name__ == "__main__":
-#     user1 = User('Test', '', '', '', '', '')
-#     # db.create_user(user1)
-#     while 1:
-#         option = int(input(
-#             "\nEscriba el numero de la opcion y presione enter: \n"
-#             "1. Listar usuarios con ultimo acceso\n"
-#             "2. Eliminar password y dehabilitar access keys\n"
-#             "3. Listar usuarios con inactividad 4 dias\n"
-#             "4. Eliminar usuarios inactivos\n"
-#             "5. Guardar usuarios en la base de datos\n"
-#             "6. Listar usuarios en base de datos\n"
-#             "7. Crear tabla en dynamodb\n"
-#             "8. Guardar usuarios en dynamodb\n"
-#             "9. Obtener usuarios de dynamodb\n"
-#         ))
-#         users1 = list_users()
-#         zombie_users = list_zombie_users()
-#
-#         user_list = []
-#         # users = [User(user['UserName'], get_last_access(user['UserName']).strftime("%m/%d/%Y, %H:%M:%S"), datetime.now().strftime("%m/%d/%Y, %H:%M:%S"), user['CreatedDate'], datetime.now().strftime("%m/%d/%Y, %H:%M:%S")) for user in users]
-#         for user in users1:
-#             user_list.append(User(
-#                 user['UserName'],
-#                 get_last_access(user) if isinstance(get_last_access(user), str) else get_last_access(user).strftime(date_format),
-#                 '',
-#                 '',
-#                 user['CreateDate'].strftime(date_format),
-#                 datetime.now().strftime(date_format)
-#             ))
-#
-#         if option == 1:
-#             [print(f"{i['UserName']}\nUltimo acceso: {get_last_access(i)}") for i in users1]
-#         elif option == 2:
-#             [delete_password_and_key(z_user['UserName']) for z_user in list_zombie_users()]
-#         elif option == 3:
-#             [print(i['UserName']) for i in list_zombie_users()]
-#         elif option == 4:
-#             # inactive_users = db.get_inactive_users()
-#             print(None)
-#             # for user in inactive_users:
-#             #     difference = datetime.now().replace(tzinfo=None) - datetime.strptime(user[2], date_format).replace(
-#             #         tzinfo=None)
-#             #     if difference.days > 1:
-#             #         delete_user(user[0])
-#         elif option == 5:
-#             print(None)
-#             # [db.create_user(user) for user in user_list]
-#         elif option == 6:
-#             print(None)
-#             # print(f"Base de datos: {db.get_users()}")
-#         elif option == 7:
-#             print(users.create_table('users'))
-#         elif option == 8:
-#             for user in user_list:
-#                 user_exists = users.user_exists(user.username)
-#                 if user_exists:
-#                     print(f"{user.username} existe!")
-#                     users.update_user(user)
-#                 else:
-#                     users.add_user(user)
-#                     print(f"{user.username} creado!")
-#         elif option == 9:
-#             print(users.scan_users())
-#         else:
-#             print("\nDigite una opcion valida!!! \n")
-#
+if __name__ == "__main__":
+    user1 = User('Test', '', '', '', '', '')
+    # db.create_user(user1)
+    while 1:
+        option = int(input(
+            "\nEscriba el numero de la opcion y presione enter: \n"
+            "1. Listar usuarios con ultimo acceso\n"
+            "2. Eliminar password y dehabilitar access keys\n"
+            "3. Listar usuarios con inactividad 4 dias\n"
+            "4. Eliminar usuarios inactivos\n"
+            "5. Guardar usuarios en la base de datos\n"
+            "6. Listar usuarios inactivos en dynamodb\n"
+            "7. Crear tabla en dynamodb\n"
+            "8. Guardar usuarios en dynamodb\n"
+            "9. Obtener usuarios de dynamodb\n"
+        ))
+        users1 = list_users()
+        zombie_users = list_zombie_users()
+
+        user_list = []
+        # users = [User(user['UserName'], get_last_access(user['UserName']).strftime("%m/%d/%Y, %H:%M:%S"), datetime.now().strftime("%m/%d/%Y, %H:%M:%S"), user['CreatedDate'], datetime.now().strftime("%m/%d/%Y, %H:%M:%S")) for user in users]
+        for user in users1:
+            user_list.append(User(
+                user['UserName'],
+                get_last_access(user) if isinstance(get_last_access(user), str) else get_last_access(user).strftime(
+                    date_format),
+                '',
+                '',
+                user['CreateDate'].strftime(date_format),
+                datetime.now().strftime(date_format)
+            ))
+
+        if option == 1:
+            [print(f"{i['UserName']}\nUltimo acceso: {get_last_access(i)}") for i in users1]
+        elif option == 2:
+            [delete_password_and_key(z_user['UserName']) for z_user in list_zombie_users()]
+        elif option == 3:
+            [print(i['UserName']) for i in list_zombie_users()]
+        elif option == 4:
+            # inactive_users = db.get_inactive_users()
+            print(None)
+            # for user in inactive_users:
+            #     difference = datetime.now().replace(tzinfo=None) - datetime.strptime(user[2], date_format).replace(
+            #         tzinfo=None)
+            #     if difference.days > 1:
+            #         delete_user(user[0])
+        elif option == 5:
+            print(None)
+            # [db.create_user(user) for user in user_list]
+        elif option == 6:
+            users.exists('users')
+            print(users.get_inactive_users())
+            # print(f"Base de datos: {db.get_users()}")
+        elif option == 7:
+            print(users.create_table('users'))
+        elif option == 8:
+            for user in user_list:
+                user_exists = users.user_exists(user.username)
+                if user_exists:
+                    print(f"{user.username} existe!")
+                    users.update_user(user)
+                else:
+                    users.add_user(user)
+                    print(f"{user.username} creado!")
+        elif option == 9:
+            print(users.scan_users())
+        else:
+            print("\nDigite una opcion valida!!! \n")
+
 
 def lambda_handler(event, context):
+    if users.exists('users'):
+        print('Tabla users ya existe!')
+    else:
+        users.create_table('users')
     user_list = []
     for user in list_users():
         user_list.append(User(

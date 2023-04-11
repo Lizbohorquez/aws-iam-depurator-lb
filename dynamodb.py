@@ -7,6 +7,8 @@ from botocore.exceptions import ClientError
 logger = logging.getLogger(__name__)
 
 date_format = "%m/%d/%Y, %H:%M:%S"
+
+
 class Users:
     """Encapsulates an Amazon DynamoDB table of user data."""
 
@@ -16,8 +18,6 @@ class Users:
         """
         self.dyn_resource = dyn_resource
         self.table = None
-        if not self.exists('users'):
-            self.create_table('users')
 
     def create_table(self, table_name):
         try:
@@ -82,12 +82,12 @@ class Users:
             self.table = table
         return exists
 
-    def scan_users(self):
+    def scan_users(self, args={}):
         users = []
-        scan_kwargs = {}
-            # 'FilterExpression': Key('username')
-            # 'ProjectionExpression': "#yr, title, info.rating",
-            # 'ExpressionAttributeNames': {"#yr": "year"}}
+        scan_kwargs = args
+        # 'FilterExpression': Key('username')
+        # 'ProjectionExpression': "#yr, title, info.rating",
+        # 'ExpressionAttributeNames': {"#yr": "year"}}
         try:
             done = False
             start_key = None
@@ -105,6 +105,14 @@ class Users:
             raise
 
         return users
+
+    def get_inactive_users(self):
+        return self.scan_users({
+            'FilterExpression': 'inactive_at <> :is_empty',
+            'ExpressionAttributeValues': {
+                ':is_empty': ''
+            }
+        })
 
     def update_user(self, user):
         try:
@@ -153,4 +161,3 @@ class Users:
                 err.response['Error']['Code'], err.response['Error']['Message'])
         else:
             return response
-
