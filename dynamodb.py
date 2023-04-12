@@ -119,9 +119,12 @@ class Users:
             if user.last_access != '':
                 response = self.table.update_item(
                     Key={'username': user.username},
-                    UpdateExpression="set last_access=:l, updated_at=:n",
+                    UpdateExpression="set last_access=:l, created_at=:c, updated_at=:n",
                     ExpressionAttributeValues={
-                        ':l': user.last_access, ':n': datetime.datetime.now().strftime(date_format)},
+                        ':l': user.last_access,
+                        ':n': datetime.datetime.now().strftime(date_format),
+                        ':c': user.created_at,
+                    },
                     ReturnValues="UPDATED_NEW"
                 )
             if user.inactive_at != '':

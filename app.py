@@ -1,23 +1,18 @@
-import time
 
 import boto3
 from datetime import datetime
 from dynamodb import Users
 import itertools
-# import db
 
 from user import User
+import constants
 
 iam = boto3.client('iam')
 dynamo_resource = boto3.resource('dynamodb')
 paginator = iam.get_paginator('list_users')
 
-date_format = "%m/%d/%Y, %H:%M:%S"
 users = Users(dynamo_resource)
 
-
-# create table if not exists
-# create_table()
 
 # listar usuarios
 def list_users():
@@ -26,14 +21,14 @@ def list_users():
 
 # Listar usuarios inactivos
 def list_zombie_users():
-    expected_days = 3
+    expected_days = constants.INACTIVE_DAYS
     result = list()
     for user in list_users():
         last_access = get_last_access(user)
         if isinstance(last_access, datetime):
             difference = (datetime.now().replace(tzinfo=None) - last_access.replace(tzinfo=None)).days
             # Dias de incatividad
-            if difference == expected_days:
+            if difference >= expected_days:
                 result.append(user)
         if isinstance(last_access, str) and (
                 datetime.now().replace(tzinfo=None) - user['CreateDate'].replace(tzinfo=None)).days > expected_days:
@@ -48,7 +43,6 @@ def list_access_keys(username):
 
 # Imprimir ultimo acceso
 def get_last_access(user):
-    # print(user['UserName'])
     access_keys = list_access_keys(user['UserName'])
     last_access_by_password = False
     last_access_by_key = False
@@ -63,8 +57,6 @@ def get_last_access(user):
         last_access_by_password = user['PasswordLastUsed']
     if last_access is None:
         last_access = user['CreateDate']
-
-    # print(f"Fecha de creacion del usuario: {last_access}")
     if last_access_by_password and last_access_by_key:
         if last_access_by_password < last_access_by_key:
             last_access = last_access_by_key
@@ -94,7 +86,7 @@ def delete_password_and_key(username):
         pass
     try:
         # db.update_users([User(username, '', datetime.now().strftime(date_format), '', '', '')])
-        users.update_user(User(username, '', datetime.now().strftime(date_format), '', '', ''))
+        users.update_user(User(username, '', datetime.now().strftime(constants.DATE_FORMAT), '', '', ''))
     except:
         print(f"Error al actualizar usuario: {username}")
     try:
@@ -111,11 +103,9 @@ def delete_password_and_key(username):
 def delete_user(username):
     access_keys = list_access_keys(username)
     try:
-        # policies = iam.list_user_policies(UserName=username)
         policies = iam.list_attached_user_policies(UserName=username)['AttachedPolicies']
         for policy in policies:
             iam.detach_user_policy(UserName=username, PolicyArn=policy['PolicyArn'])
-            # iam.delete_user_policy(UserName=username, PolicyName=policy['PolicyName'])
     except:
         pass
     try:
@@ -129,7 +119,6 @@ def delete_user(username):
     # Se elimina finalmente el usuario de IAM
     try:
         print(iam.delete_user(UserName=username))
-        # db.update_users([User(username, '', '', datetime.now().strftime("%m/%d/%Y, %H:%M:%S"), '', '')])
         users.update_user(User(username, '', '', datetime.now().strftime("%m/%d/%Y, %H:%M:%S"), '', ''))
         print(f"Usuario {username} eliminado")
     except:
@@ -161,11 +150,11 @@ if __name__ == "__main__":
             user_list.append(User(
                 user['UserName'],
                 get_last_access(user) if isinstance(get_last_access(user), str) else get_last_access(user).strftime(
-                    date_format),
+                    constants.DATE_FORMAT),
                 '',
                 '',
-                user['CreateDate'].strftime(date_format),
-                datetime.now().strftime(date_format)
+                user['CreateDate'].strftime(constants.DATE_FORMAT),
+                datetime.now().strftime(constants.DATE_FORMAT)
             ))
 
         if option == 1:
@@ -175,13 +164,13 @@ if __name__ == "__main__":
         elif option == 3:
             [print(i['UserName']) for i in list_zombie_users()]
         elif option == 4:
-            # inactive_users = db.get_inactive_users()
-            print(None)
-            # for user in inactive_users:
-            #     difference = datetime.now().replace(tzinfo=None) - datetime.strptime(user[2], date_format).replace(
-            #         tzinfo=None)
-            #     if difference.days > 1:
-            #         delete_user(user[0])
+            users.exists('users')
+            inactive_users = users.get_inactive_users()
+            for user in inactive_users:
+                difference = datetime.now().replace(tzinfo=None) - datetime.strptime(user['inactive_at'], constants.DATE_FORMAT).replace(tzinfo=None)
+                if difference.days > 1:
+                    print(f"Eliminando {user['username']}")
+                    delete_user(user['username'])
         elif option == 5:
             print(None)
             # [db.create_user(user) for user in user_list]
@@ -212,15 +201,16 @@ def lambda_handler(event, context):
     else:
         users.create_table('users')
     user_list = []
+    users_to_delete = users.get_inactive_users()
     for user in list_users():
         user_list.append(User(
             user['UserName'],
             get_last_access(user) if isinstance(get_last_access(user), str) else get_last_access(user).strftime(
-                date_format),
+                constants.DATE_FORMAT),
             '',
             '',
-            user['CreateDate'].strftime(date_format),
-            datetime.now().strftime(date_format)
+            user['CreateDate'].strftime(constants.DATE_FORMAT),
+            datetime.now().strftime(constants.DATE_FORMAT)
         ))
     for user in user_list:
         user_exists = users.user_exists(user.username)
@@ -231,3 +221,10 @@ def lambda_handler(event, context):
             users.add_user(user)
             print(f"{user.username} creado!")
     [delete_password_and_key(z_user['UserName']) for z_user in list_zombie_users()]
+    for user in users_to_delete:
+        difference = datetime.now().replace(tzinfo=None) - datetime.strptime(user['inactive_at'], constants.DATE_FORMAT).replace(
+            tzinfo=None)
+        if difference.days > constants.INACTIVE_DAYS_TO_DELETE:
+            print(f"Eliminando {user['username']}")
+            delete_user(user['username'])
+    return "Lambda executed successfully..."
