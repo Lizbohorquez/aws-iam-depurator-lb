@@ -108,7 +108,7 @@ class Users:
 
     def get_inactive_users(self):
         return self.scan_users({
-            'FilterExpression': 'inactive_at <> :is_empty',
+            'FilterExpression': 'inactive_at <> :is_empty AND delete_at = :is_empty',
             'ExpressionAttributeValues': {
                 ':is_empty': ''
             }

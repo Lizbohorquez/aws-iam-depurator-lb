@@ -168,7 +168,7 @@ if __name__ == "__main__":
             inactive_users = users.get_inactive_users()
             for user in inactive_users:
                 difference = datetime.now().replace(tzinfo=None) - datetime.strptime(user['inactive_at'], constants.DATE_FORMAT).replace(tzinfo=None)
-                if difference.days > 1:
+                if difference.days > constants.INACTIVE_DAYS_TO_DELETE:
                     print(f"Eliminando {user['username']}")
                     delete_user(user['username'])
         elif option == 5:
