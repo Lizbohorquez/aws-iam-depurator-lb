@@ -114,6 +114,12 @@ def delete_user(username):
             iam.remove_role_from_user(UserName=username, RoleName=role['RoleName'])
     except:
         pass
+    try:
+        groups = iam.list_groups_for_user(UserName=username)['Groups']
+        for group in groups:
+            iam.remove_user_from_group(GroupName=group['GroupName'], UserName=username)
+    except:
+        pass
     for access_key in access_keys['AccessKeyMetadata']:
         iam.delete_access_key(UserName=username, AccessKeyId=access_key['AccessKeyId'])
     # Se elimina finalmente el usuario de IAM
