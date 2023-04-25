@@ -24,12 +24,12 @@ class Users:
             self.table = self.dyn_resource.create_table(
                 TableName=table_name,
                 KeySchema=[
-                    {'AttributeName': 'username', 'KeyType': 'HASH'},  # Partition key
-                    # {'AttributeName': 'last_access', 'KeyType': 'RANGE'}  # Sort key
+                    {'AttributeName': 'account_id', 'KeyType': 'HASH'},  # Partition key
+                    {'AttributeName': 'username', 'KeyType': 'RANGE'}  # Sort key
                 ],
                 AttributeDefinitions=[
-                    {'AttributeName': 'username', 'AttributeType': 'S'},
-                    # {'AttributeName': 'last_access', 'AttributeType': 'S'}
+                    {'AttributeName': 'account_id', 'AttributeType': 'S'},
+                    {'AttributeName': 'username', 'AttributeType': 'S'}
                 ],
                 ProvisionedThroughput={'ReadCapacityUnits': 1, 'WriteCapacityUnits': 1})
             self.table.wait_until_exists()
@@ -45,6 +45,7 @@ class Users:
         try:
             self.table.put_item(
                 Item={
+                    'account_id': user.account_id,
                     'username': user.username,
                     'last_access': user.last_access,
                     'inactive_at': user.inactive_at,
@@ -118,7 +119,7 @@ class Users:
         try:
             if user.last_access != '':
                 response = self.table.update_item(
-                    Key={'username': user.username},
+                    Key={'account_id': user.account_id, 'username': user.username},
                     UpdateExpression="set last_access=:l, created_at=:c, updated_at=:n",
                     ExpressionAttributeValues={
                         ':l': user.last_access,
@@ -129,7 +130,7 @@ class Users:
                 )
             if user.inactive_at != '':
                 response = self.table.update_item(
-                    Key={'username': user.username},
+                    Key={'account_id': user.account_id, 'username': user.username},
                     UpdateExpression="set inactive_at=:i, updated_at=:n",
                     ExpressionAttributeValues={
                         ':i': user.inactive_at, ':n': datetime.datetime.now().strftime(date_format)},
@@ -137,7 +138,7 @@ class Users:
                 )
             if user.delete_at != '':
                 response = self.table.update_item(
-                    Key={'username': user.username},
+                    Key={'account_id': user.account_id, 'username': user.username},
                     UpdateExpression="set delete_at=:d, updated_at=:n",
                     ExpressionAttributeValues={
                         ':d': user.delete_at, ':n': datetime.datetime.now().strftime(date_format)},
@@ -145,15 +146,15 @@ class Users:
                 )
         except ClientError as err:
             logger.error(
-                "Couldn't update movie %s in table %s. Here's why: %s: %s", self.table.name,
+                "Couldn't update user %s in table %s. Here's why: %s: %s", self.table.name,
                 err.response['Error']['Code'], err.response['Error']['Message'])
             raise
         else:
             return response['Attributes']
 
-    def user_exists(self, username):
+    def user_exists(self, account_id, username):
         try:
-            response = self.table.query(KeyConditionExpression=Key('username').eq(username))
+            response = self.table.query(KeyConditionExpression=Key('account_id').eq(account_id) & Key('username').eq(username))
             if len(response['Items']) > 0:
                 response = True
             else:

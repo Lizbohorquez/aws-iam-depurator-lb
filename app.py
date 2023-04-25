@@ -1,4 +1,3 @@
-
 import boto3
 from datetime import datetime
 from dynamodb import Users
@@ -8,14 +7,17 @@ from user import User
 import constants
 
 iam = boto3.client('iam')
+sts = boto3.client('sts')
 dynamo_resource = boto3.resource('dynamodb')
-paginator = iam.get_paginator('list_users')
+
 
 users = Users(dynamo_resource)
+account_ids = ['921725861196']
 
 
 # listar usuarios
 def list_users():
+    paginator = iam.get_paginator('list_users')
     return list(itertools.chain.from_iterable([i["Users"] for i in paginator.paginate()]))
 
 
@@ -132,7 +134,7 @@ def delete_user(username):
 
 
 if __name__ == "__main__":
-    user1 = User('Test', '', '', '', '', '')
+    # user1 = User('Test', '', '', '', '', '')
     # db.create_user(user1)
     while 1:
         option = int(input(
@@ -151,9 +153,11 @@ if __name__ == "__main__":
         zombie_users = list_zombie_users()
 
         user_list = []
+        account_id = sts.get_caller_identity().get('Account')
         # users = [User(user['UserName'], get_last_access(user['UserName']).strftime("%m/%d/%Y, %H:%M:%S"), datetime.now().strftime("%m/%d/%Y, %H:%M:%S"), user['CreatedDate'], datetime.now().strftime("%m/%d/%Y, %H:%M:%S")) for user in users]
         for user in users1:
             user_list.append(User(
+                account_id,
                 user['UserName'],
                 get_last_access(user) if isinstance(get_last_access(user), str) else get_last_access(user).strftime(
                     constants.DATE_FORMAT),
@@ -173,7 +177,9 @@ if __name__ == "__main__":
             users.exists('users')
             inactive_users = users.get_inactive_users()
             for user in inactive_users:
-                difference = datetime.now().replace(tzinfo=None) - datetime.strptime(user['inactive_at'], constants.DATE_FORMAT).replace(tzinfo=None)
+                difference = datetime.now().replace(tzinfo=None) - datetime.strptime(user['inactive_at'],
+                                                                                     constants.DATE_FORMAT).replace(
+                    tzinfo=None)
                 if difference.days > constants.INACTIVE_DAYS_TO_DELETE:
                     print(f"Eliminando {user['username']}")
                     delete_user(user['username'])
@@ -187,8 +193,12 @@ if __name__ == "__main__":
         elif option == 7:
             print(users.create_table('users'))
         elif option == 8:
+            if users.exists('users'):
+                print('Tabla users ya existe!')
+            else:
+                users.create_table('users')
             for user in user_list:
-                user_exists = users.user_exists(user.username)
+                user_exists = users.user_exists(user.account_id, user.username)
                 if user_exists:
                     print(f"{user.username} existe!")
                     users.update_user(user)
@@ -201,36 +211,106 @@ if __name__ == "__main__":
             print("\nDigite una opcion valida!!! \n")
 
 
+def role_arn_to_session(**args):
+    client = boto3.client("sts")
+    response = client.assume_role(**args)
+    return boto3.Session(
+        aws_access_key_id=response["Credentials"]["AccessKeyId"],
+        aws_secret_access_key=response["Credentials"]["SecretAccessKey"],
+        aws_session_token=response["Credentials"]["SessionToken"],
+    )
+
+
 def lambda_handler(event, context):
+    # validar instancia de la tabla (requerido)
     if users.exists('users'):
         print('Tabla users ya existe!')
     else:
         users.create_table('users')
-    user_list = []
-    users_to_delete = users.get_inactive_users()
-    for user in list_users():
-        user_list.append(User(
-            user['UserName'],
-            get_last_access(user) if isinstance(get_last_access(user), str) else get_last_access(user).strftime(
-                constants.DATE_FORMAT),
-            '',
-            '',
-            user['CreateDate'].strftime(constants.DATE_FORMAT),
-            datetime.now().strftime(constants.DATE_FORMAT)
-        ))
-    for user in user_list:
-        user_exists = users.user_exists(user.username)
-        if user_exists:
-            print(f"{user.username} existe!")
-            users.update_user(user)
+    events = {
+        'test': 0,
+        'staging': 1,
+        'prod': 2
+    }
+    event = event['detail']['mode']
+    if event in list(dict.fromkeys(events)):
+        event_number = events[event]
+
+    global iam
+    for account in account_ids:
+        session = role_arn_to_session(
+            RoleArn=f'arn:aws:iam::{account}:role/iam-list-user-role-tem',
+            RoleSessionName=f'lambda-cleaner-session-{account}'
+        )
+        iam = session.client('iam')
+        sts = session.client('sts')
+        account_id = sts.get_caller_identity().get('Account')
+        user_list = []
+        users_to_delete = users.get_inactive_users()
+        if event_number >= 0:
+            for user in list_users():
+                user_list.append(User(
+                    account_id,
+                    user['UserName'],
+                    get_last_access(user) if isinstance(get_last_access(user), str) else get_last_access(user).strftime(
+                        constants.DATE_FORMAT),
+                    '',
+                    '',
+                    user['CreateDate'].strftime(constants.DATE_FORMAT),
+                    datetime.now().strftime(constants.DATE_FORMAT)
+                ))
+            # [test] crear o actualizar usuarios en dynamodb
+            for user in user_list:
+                user_exists = users.user_exists(user.account_id, user.username)
+                if user_exists:
+                    print(f"{user.username} existe!")
+                    users.update_user(user)
+                else:
+                    users.add_user(user)
+                    print(f"{user.username} creado!")
+        elif event_number >= 1:
+            # [staging] inhabilitar access keys y eliminar password
+            [delete_password_and_key(z_user['UserName']) for z_user in list_zombie_users()]
+        elif event_number == 2:
+            # [prod] elimina usuarios inactivos en dynamodb
+            for user in users_to_delete:
+                difference = datetime.now().replace(tzinfo=None) - datetime.strptime(user['inactive_at'],
+                                                                                     constants.DATE_FORMAT).replace(
+                    tzinfo=None)
+                if difference.days > constants.INACTIVE_DAYS_TO_DELETE:
+                    print(f"Eliminando {user['username']}")
+                    delete_user(user['username'])
         else:
-            users.add_user(user)
-            print(f"{user.username} creado!")
-    [delete_password_and_key(z_user['UserName']) for z_user in list_zombie_users()]
-    for user in users_to_delete:
-        difference = datetime.now().replace(tzinfo=None) - datetime.strptime(user['inactive_at'], constants.DATE_FORMAT).replace(
-            tzinfo=None)
-        if difference.days > constants.INACTIVE_DAYS_TO_DELETE:
-            print(f"Eliminando {user['username']}")
-            delete_user(user['username'])
+            return "Evento no valido!"
+
     return "Lambda executed successfully..."
+    # user_list = []
+    # users_to_delete = users.get_inactive_users()
+    # for user in list_users():
+    #     user_list.append(User(
+    #         account_id,
+    #         user['UserName'],
+    #         get_last_access(user) if isinstance(get_last_access(user), str) else get_last_access(user).strftime(
+    #             constants.DATE_FORMAT),
+    #         '',
+    #         '',
+    #         user['CreateDate'].strftime(constants.DATE_FORMAT),
+    #         datetime.now().strftime(constants.DATE_FORMAT)
+    #     ))
+    # for user in user_list:
+    #     user_exists = users.user_exists(user.username)
+    #     if user_exists:
+    #         print(f"{user.username} existe!")
+    #         users.update_user(user)
+    #     else:
+    #         users.add_user(user)
+    #         print(f"{user.username} creado!")
+    # [delete_password_and_key(z_user['UserName']) for z_user in list_zombie_users()]
+    # for user in users_to_delete:
+    #     difference = datetime.now().replace(tzinfo=None) - datetime.strptime(user['inactive_at'],
+    #                                                                          constants.DATE_FORMAT).replace(
+    #         tzinfo=None)
+    #     if difference.days > constants.INACTIVE_DAYS_TO_DELETE:
+    #         print(f"Eliminando {user['username']}")
+    #         delete_user(user['username'])
+
