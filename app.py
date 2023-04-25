@@ -12,7 +12,7 @@ dynamo_resource = boto3.resource('dynamodb')
 
 
 users = Users(dynamo_resource)
-account_ids = ['921725861196']
+account_ids = []
 
 
 # listar usuarios
