@@ -20,6 +20,11 @@ class Users:
         self.table = None
 
     def create_table(self, table_name):
+        """
+        Create a table with table_name as name.
+        :param table_name: The name of the table to create.
+        :return: Table info in dict; otherwise, raise a error.
+        """
         try:
             self.table = self.dyn_resource.create_table(
                 TableName=table_name,
@@ -42,6 +47,11 @@ class Users:
             return self.table
 
     def add_user(self, user):
+        """
+        Add a user to table.
+        :param user: A object of User class.
+        :return: user details if added; otherwise, raise a error.
+        """
         try:
             self.table.put_item(
                 Item={
@@ -84,6 +94,11 @@ class Users:
         return exists
 
     def scan_users(self, args={}):
+        """
+        Get all users in table.
+        :param args: Dict with filters.
+        :return: users in table; otherwise, raise a error.
+        """
         users = []
         scan_kwargs = args
         # 'FilterExpression': Key('username')
@@ -108,6 +123,10 @@ class Users:
         return users
 
     def get_inactive_users(self):
+        """
+        Get all of inactive users in table.
+        :return: users in table with inactive_at field not empty; otherwise, raise a error.
+        """
         return self.scan_users({
             'FilterExpression': 'inactive_at <> :is_empty AND delete_at = :is_empty',
             'ExpressionAttributeValues': {
@@ -116,6 +135,11 @@ class Users:
         })
 
     def update_user(self, user):
+        """
+        Update a user in table.
+        :param user: A object of User class to update.
+        :return: response attributes if updated; otherwise, raise a error.
+        """
         try:
             if user.last_access != '':
                 response = self.table.update_item(
@@ -153,6 +177,12 @@ class Users:
             return response['Attributes']
 
     def user_exists(self, account_id, username):
+        """
+        Determines whether a user exists in table.
+        :param account_id: id of aws account where user owns.
+        :param username: username of user to search.
+        :return: True when the table exists; otherwise, False.
+        """
         try:
             response = self.table.query(KeyConditionExpression=Key('account_id').eq(account_id) & Key('username').eq(username))
             if len(response['Items']) > 0:
