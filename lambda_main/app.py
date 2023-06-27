@@ -233,10 +233,11 @@ def lambda_handler(event, context):
         'deactiveusersrule': 1,
         'deleteusersrule': 2
     }
-    rule_name = ['resources'][0].split('/')[-1]
+    rule_name = event['resources'][0].split('/')[-1]
     # event = event['detail']['mode']
-    if event in rule_name:
-        event_number = events[event]
+    for event in list(events.keys()):
+        if event in rule_name:
+            event_number = events[event]
     print(f'Event: {event} \n Event number: {event_number}', )
     global iam
     for account in account_ids:
