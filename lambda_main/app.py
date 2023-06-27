@@ -223,18 +223,19 @@ def lambda_handler(event, context):
           una cadena que indica si la función se ejecutó correctamente.
         """
     # validar instancia de la tabla (requerido)
+    print(event)
     if users.exists(constants.TABLE_NAME):
         print(f'Tabla {constants.TABLE_NAME} ya existe!')
     else:
         users.create_table(constants.TABLE_NAME)
     events = {
-        'list-users-rule': 0,
-        'deactive-users-rule': 1,
-        'delete-users-rule': 2
+        'listusersrule': 0,
+        'deactiveusersrule': 1,
+        'deleteusersrule': 2
     }
-    event = ['resources'][0].split('/')[-1]
+    rule_name = ['resources'][0].split('/')[-1]
     # event = event['detail']['mode']
-    if event in list(dict.fromkeys(events)):
+    if event in rule_name:
         event_number = events[event]
     print(f'Event: {event} \n Event number: {event_number}', )
     global iam
