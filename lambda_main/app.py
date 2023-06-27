@@ -228,11 +228,12 @@ def lambda_handler(event, context):
     else:
         users.create_table(constants.TABLE_NAME)
     events = {
-        'test': 0,
-        'staging': 1,
-        'prod': 2
+        'list-users-rule': 0,
+        'deactive-users-rule': 1,
+        'delete-users-rule': 2
     }
-    event = event['detail']['mode']
+    event = ['resources'][0].split('/')[-1]
+    # event = event['detail']['mode']
     if event in list(dict.fromkeys(events)):
         event_number = events[event]
     print(f'Event: {event} \n Event number: {event_number}', )
